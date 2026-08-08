@@ -143,7 +143,7 @@ public class FileSystemManager : MonoBehaviour
 
         List<string> segments = new List<string>();
         FindFolderPath(desktopItems, folder, segments);
-        return string.Join("/", segments);
+        return string.Join("\\", segments);
     }
 
     private bool FindFolderPath(IList<MemoryFile> list, MemoryFile folder, List<string> segments)

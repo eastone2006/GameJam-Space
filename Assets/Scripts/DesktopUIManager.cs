@@ -46,7 +46,12 @@ public class DesktopUIManager : MonoBehaviour, IIconHost
         RefreshSpaceText();
 
         if (pathText != null)
-            pathText.text = rootPathLabel;
+        {
+            string root = rootPathLabel.Replace('/', '\\');
+            if (!root.EndsWith("\\"))
+                root += "\\";
+            pathText.text = root;
+        }
     }
 
     private void Update()

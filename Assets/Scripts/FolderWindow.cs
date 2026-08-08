@@ -58,11 +58,9 @@ public class FolderWindow : MonoBehaviour, IPointerDownHandler, IIconHost
             ? FileSystemManager.Instance.GetFolderPath(Folder)
             : (Folder != null ? Folder.fileName : string.Empty);
 
-        char separator = rootPathLabel.Contains("\\") ? '\\' : '/';
-
-        string root = rootPathLabel;
-        if (!root.EndsWith("/") && !root.EndsWith("\\"))
-            root += separator;
+        string root = rootPathLabel.Replace('/', '\\');
+        if (!root.EndsWith("\\"))
+            root += "\\";
 
         return string.IsNullOrEmpty(relative) ? root : root + relative;
     }
