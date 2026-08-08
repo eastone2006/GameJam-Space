@@ -22,10 +22,10 @@ public class DesktopUIManager : MonoBehaviour, IIconHost
     [Header("Desktop Layout")]
     [SerializeField] private KeyCode resetLayoutKey = KeyCode.R;
     [SerializeField] private int iconsPerRow = 5;
-    [SerializeField] private float horizontalSpacing = 20f;
-    [SerializeField] private float verticalSpacing = 20f;
-    [SerializeField] private float paddingTop = 20f;
-    [SerializeField] private float paddingLeft = 20f;
+    [SerializeField] private float horizontalSpacing = 60f;
+    [SerializeField] private float verticalSpacing = 60f;
+    [SerializeField] private float paddingTop = 30f;
+    [SerializeField] private float paddingLeft = 30f;
 
     public Canvas Canvas => canvas;
     public RectTransform ContentRoot => gridRoot;
@@ -139,9 +139,8 @@ public class DesktopUIManager : MonoBehaviour, IIconHost
     public void RefreshSpaceText()
     {
         if (spaceText == null) return;
-        spaceText.text = string.Format("Available Space: {0} / {1} MB",
-            FileSystemManager.Instance.AvailableSpace.ToString("F0"),
-            FileSystemManager.Instance.TotalSpace.ToString("F0"));
+        spaceText.text = string.Format("Available Space: {0} MB",
+            FileSystemManager.Instance.AvailableSpace.ToString("F0"));
     }
 
     public void OnIconClicked(DesktopIcon icon)

@@ -12,10 +12,6 @@ public class FileSystemManager : MonoBehaviour
     [SerializeField] private bool persistAcrossScenes = true;
     [SerializeField] private List<MemoryFile> desktopItems = new List<MemoryFile>();
 
-    [Header("Auto Generate Junk")]
-    [SerializeField] private bool autoGenerateJunkFiles = true;
-    [SerializeField] private List<JunkFileTemplate> junkTemplates = new List<JunkFileTemplate>();
-
     public float TotalSpace => displayTotalSpace;
     public float AvailableSpace { get; private set; }
     public IReadOnlyList<MemoryFile> DesktopItems => desktopItems;
@@ -38,8 +34,8 @@ public class FileSystemManager : MonoBehaviour
 
         AvailableSpace = Mathf.Max(0f, initialAvailableSpace);
 
-        if (autoGenerateJunkFiles && desktopItems.Count == 0)
-            GenerateDefaultJunkFiles();
+        if (desktopItems.Count == 0)
+            GenerateDefaultFileSystem();
     }
 
     private void OnDestroy()
@@ -79,33 +75,81 @@ public class FileSystemManager : MonoBehaviour
         return true;
     }
 
-    public void GenerateDefaultJunkFiles()
+    public void GenerateDefaultFileSystem()
     {
-        List<JunkFileTemplate> templates = junkTemplates.Count > 0
-            ? junkTemplates
-            : new List<JunkFileTemplate>
-            {
-                new JunkFileTemplate { fileName = "Assignments", size = 12f },
-                new JunkFileTemplate { fileName = "Screenshots", size = 25f },
-                new JunkFileTemplate { fileName = "TempLog", size = 8f },
-                new JunkFileTemplate { fileName = "OldProjects", size = 40f },
-                new JunkFileTemplate { fileName = "SetupCache", size = 15f },
-                new JunkFileTemplate { fileName = "DownloadedClips", size = 18f }
-            };
+        desktopItems.Clear();
 
-        foreach (JunkFileTemplate template in templates)
+        desktopItems.Add(CreateFile("Assignments", 12f));
+        desktopItems.Add(CreateFile("Screenshots", 25f));
+        desktopItems.Add(CreateFile("TempLog", 8f));
+        desktopItems.Add(CreateFile("OldProjects", 40f));
+        desktopItems.Add(CreateFile("SetupCache", 15f));
+
+        desktopItems.Add(CreateFolder("Downloads", MemoryType.JunkFile, null,
+            CreateFile("Setup_Files", 18f),
+            CreateFile("Browser_Cache", 9f)));
+
+        desktopItems.Add(CreateFolder("Old_Backups", MemoryType.JunkFile, null,
+            CreateFile("Backup_2021", 22f),
+            CreateFile("Backup_2022", 26f)));
+
+        desktopItems.Add(CreateFolder("System_Temp", MemoryType.JunkFile, null,
+            CreateFile("Log_Files", 6f),
+            CreateFile("Dump_Data", 11f)));
+
+        desktopItems.Add(CreateFolder("Cached_Media", MemoryType.JunkFile, null,
+            CreateFile("Thumbnails", 5f),
+            CreateFile("Stream_Buffer", 14f)));
+
+        desktopItems.Add(CreateFolder("Birthday", MemoryType.CoreMemory, "birthday",
+            CreateFile("Birthday_Photo_001", 10f),
+            CreateFile("Cake_Candle_Video", 15f)));
+
+        desktopItems.Add(CreateFolder("Mothers Voice", MemoryType.CoreMemory, "mothers_voice",
+            CreateFile("Moms_Voice_001", 12f),
+            CreateFile("Bedtime_Story", 18f)));
+
+        desktopItems.Add(CreateFolder("Graduation", MemoryType.CoreMemory, "graduation",
+            CreateFile("Graduation_Ceremony", 30f),
+            CreateFile("Diploma_Scan", 5f)));
+
+        desktopItems.Add(CreateFolder("Travel", MemoryType.CoreMemory, "travel",
+            CreateFile("Roadtrip_Clips", 20f),
+            CreateFile("Beach_Photo", 8f)));
+
+        desktopItems.Add(CreateFile("AI.exe", 30f, MemoryType.CoreMemory, "ai"));
+    }
+
+    private static MemoryFile CreateFile(string fileName, float size,
+        MemoryType type = MemoryType.JunkFile, string memoryId = null)
+    {
+        return new MemoryFile
         {
-            desktopItems.Add(new MemoryFile
-            {
-                fileName = template.fileName,
-                memoryId = "",
-                fileIcon = null,
-                type = MemoryType.JunkFile,
-                size = template.size,
-                isDeleted = false,
-                isFolder = false
-            });
-        }
+            fileName = fileName,
+            memoryId = memoryId ?? string.Empty,
+            fileIcon = null,
+            type = type,
+            size = size,
+            isDeleted = false,
+            isFolder = false
+        };
+    }
+
+    private static MemoryFile CreateFolder(string fileName, MemoryType type, string memoryId,
+        params MemoryFile[] children)
+    {
+        MemoryFile folder = new MemoryFile
+        {
+            fileName = fileName,
+            memoryId = memoryId ?? string.Empty,
+            fileIcon = null,
+            type = type,
+            size = 0f,
+            isDeleted = false,
+            isFolder = true
+        };
+        folder.children.AddRange(children);
+        return folder;
     }
 
     public void MoveFileToFolder(MemoryFile file, MemoryFile targetFolder)
@@ -181,6 +225,31 @@ public class FileSystemManager : MonoBehaviour
         return null;
     }
 
+    public MemoryFile FindParentFolder(MemoryFile file)
+    {
+        foreach (MemoryFile item in desktopItems)
+        {
+            MemoryFile parent = FindParentFolderInChildren(item, file);
+            if (parent != null)
+                return parent;
+        }
+        return null;
+    }
+
+    private MemoryFile FindParentFolderInChildren(MemoryFile folder, MemoryFile file)
+    {
+        if (folder.isFolder && folder.children.Contains(file))
+            return folder;
+
+        foreach (MemoryFile child in folder.children)
+        {
+            MemoryFile parent = FindParentFolderInChildren(child, file);
+            if (parent != null)
+                return parent;
+        }
+        return null;
+    }
+
     private IList<MemoryFile> FindParentListInChildren(MemoryFile folder, MemoryFile file)
     {
         if (!folder.isFolder) return null;
@@ -233,11 +302,4 @@ public class FileSystemManager : MonoBehaviour
         }
         return null;
     }
-}
-
-[Serializable]
-public class JunkFileTemplate
-{
-    public string fileName;
-    public float size;
 }

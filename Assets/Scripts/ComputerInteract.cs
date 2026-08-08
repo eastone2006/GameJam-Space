@@ -93,6 +93,8 @@ public class ComputerInteract : MonoBehaviour
         if (promptUI != null)
             promptUI.SetActive(false);
 
+        AITextDialogController.Instance?.NotifyDesktopFirstOpened();
+
         IsUsingComputer = true;
         IsTransitioning = false;
     }

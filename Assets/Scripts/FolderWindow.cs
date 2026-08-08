@@ -16,10 +16,12 @@ public class FolderWindow : MonoBehaviour, IPointerDownHandler, IIconHost
 
     [Header("Window Layout")]
     [SerializeField] private int iconsPerRow = 5;
-    [SerializeField] private float horizontalSpacing = 12f;
-    [SerializeField] private float verticalSpacing = 12f;
-    [SerializeField] private float paddingTop = 10f;
-    [SerializeField] private float paddingLeft = 10f;
+    [SerializeField] private float horizontalSpacing = 45f;
+    [SerializeField] private float verticalSpacing = 45f;
+    [SerializeField] private float paddingTop = 24f;
+    [SerializeField] private float paddingLeft = 24f;
+    [Tooltip("窗口内图标尺寸放大倍数（图标大小与间距同步放大）")]
+    [SerializeField] private float iconScale = 1.5f;
     [SerializeField] private Vector2 minSize = new Vector2(200f, 220f);
 
     public MemoryFile Folder { get; private set; }
@@ -152,6 +154,7 @@ public class FolderWindow : MonoBehaviour, IPointerDownHandler, IIconHost
         RectTransform iconRect = icon.Rect;
         iconRect.anchorMin = iconRect.anchorMax = new Vector2(0.5f, 0.5f);
         iconRect.pivot = new Vector2(0.5f, 0.5f);
+        iconRect.sizeDelta = GetScaledIconSize();
 
         Vector2 gridPosition = GetGridPosition(index);
         icon.SetDefaultPosition(gridPosition);
@@ -159,10 +162,15 @@ public class FolderWindow : MonoBehaviour, IPointerDownHandler, IIconHost
         iconRect.anchoredPosition = file.hasSavedPosition ? file.savedPosition : gridPosition;
     }
 
+    private Vector2 GetScaledIconSize()
+    {
+        return iconPrefab.GetComponent<RectTransform>().sizeDelta * iconScale;
+    }
+
     private Vector2 GetGridPosition(int index)
     {
         Rect bounds = contentRoot.rect;
-        Vector2 iconSize = iconPrefab.GetComponent<RectTransform>().sizeDelta;
+        Vector2 iconSize = GetScaledIconSize();
         float cellWidth = iconSize.x + horizontalSpacing;
         float cellHeight = iconSize.y + verticalSpacing;
 

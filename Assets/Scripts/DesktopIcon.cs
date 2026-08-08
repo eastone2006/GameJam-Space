@@ -69,9 +69,15 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (Host == null) return;
 
         if (eventData.clickCount >= 2)
+        {
             Host.OnIconDoubleClicked(this);
+        }
         else
+        {
+            if (File != null)
+                AITextDialogController.Instance?.NotifyFileClicked(File);
             Host.OnIconClicked(this);
+        }
     }
 
     public void OnBeginDrag(PointerEventData eventData)

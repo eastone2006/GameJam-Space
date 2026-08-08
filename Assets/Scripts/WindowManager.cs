@@ -22,6 +22,8 @@ public class WindowManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI confirmMessageText;
     [SerializeField] private Button confirmYesButton;
     [SerializeField] private Button confirmNoButton;
+    [Tooltip("删除 AI 本体需要尝试的次数（期间 AI 会逃逸进随机文件夹）")]
+    [SerializeField] private int aiDeleteAttemptsRequired = 3;
 
     [Header("Lifecycle")]
     [SerializeField] private bool persistAcrossScenes = true;
@@ -34,6 +36,10 @@ public class WindowManager : MonoBehaviour
     private DesktopIcon draggedIcon;
     private DesktopIcon pendingIcon;
     private bool awaitingConfirm;
+
+    private int aiDeleteAttempts;
+    private bool aiAttemptPending;
+    private MemoryFile aiPendingTarget;
 
     private void Awake()
     {
@@ -91,6 +97,8 @@ public class WindowManager : MonoBehaviour
     public void OpenFolderWindow(MemoryFile folder)
     {
         if (folder == null) return;
+
+        AITextDialogController.Instance?.NotifyFolderOpened(folder);
 
         FolderWindow existing = FindWindow(folder);
         if (existing != null)
@@ -229,6 +237,28 @@ public class WindowManager : MonoBehaviour
     {
         if (icon == null || icon.File == null) return;
 
+        if (aiDeleteAttempts < aiDeleteAttemptsRequired && FileOrDescendantIsAi(icon.File))
+        {
+            aiPendingTarget = PickRandomFolder(icon.File);
+
+            aiAttemptPending = true;
+            awaitingConfirm = true;
+            pendingIcon = icon;
+
+            int attempt = aiDeleteAttempts + 1;
+            string targetName = aiPendingTarget != null ? aiPendingTarget.fileName : "the desktop";
+
+            if (confirmMessageText != null)
+            {
+                confirmMessageText.text = string.Format(
+                    "ACCESS DENIED. Attempt {0}/{1}. Core process relocated to: {2}. Continue searching?",
+                    attempt, aiDeleteAttemptsRequired, targetName);
+            }
+
+            confirmPanel.SetActive(true);
+            return;
+        }
+
         awaitingConfirm = true;
         pendingIcon = icon;
 
@@ -240,31 +270,119 @@ public class WindowManager : MonoBehaviour
 
     public void OnConfirmYes()
     {
+        if (aiAttemptPending)
+        {
+            aiAttemptPending = false;
+            awaitingConfirm = false;
+            confirmPanel.SetActive(false);
+
+            DesktopIcon icon = pendingIcon;
+            pendingIcon = null;
+            draggedIcon = null;
+
+            if (icon == null || icon.File == null) return;
+
+            aiDeleteAttempts++;
+
+            if (aiDeleteAttempts >= aiDeleteAttemptsRequired)
+            {
+                FileSystemManager.Instance.TryDeleteFile(icon.File);
+                Destroy(icon.gameObject);
+            }
+            else
+            {
+                MemoryFile target = aiPendingTarget;
+                aiPendingTarget = null;
+
+                if (target != null)
+                    FileSystemManager.Instance.MoveFileToFolder(icon.File, target);
+
+                RefreshAll();
+                Destroy(icon.gameObject);
+            }
+            return;
+        }
+
         awaitingConfirm = false;
         confirmPanel.SetActive(false);
 
-        DesktopIcon icon = pendingIcon;
+        DesktopIcon normalIcon = pendingIcon; // 变量名避开冲突
         pendingIcon = null;
         draggedIcon = null;
 
-        if (icon != null && icon.File != null)
+        if (normalIcon != null && normalIcon.File != null)
         {
-            FileSystemManager.Instance.TryDeleteFile(icon.File);
-            Destroy(icon.gameObject);
+            FileSystemManager.Instance.TryDeleteFile(normalIcon.File);
+            Destroy(normalIcon.gameObject);
         }
     }
 
     public void OnConfirmNo()
     {
+        if (aiAttemptPending)
+        {
+            aiAttemptPending = false;
+            awaitingConfirm = false;
+            confirmPanel.SetActive(false);
+
+            DesktopIcon icon = pendingIcon;
+            pendingIcon = null;
+            draggedIcon = null;
+            aiPendingTarget = null;
+
+            if (icon != null)
+                icon.ReturnToHost();
+            return;
+        }
+
         awaitingConfirm = false;
         confirmPanel.SetActive(false);
 
-        DesktopIcon icon = pendingIcon;
+        DesktopIcon cancelIcon = pendingIcon;
         pendingIcon = null;
         draggedIcon = null;
 
-        if (icon != null)
-            icon.ReturnToHost();
+        if (cancelIcon != null)
+            cancelIcon.ReturnToHost();
+    }
+
+    private MemoryFile PickRandomFolder(MemoryFile aiFile)
+    {
+        List<MemoryFile> candidates = new List<MemoryFile>();
+        CollectExistingFolders(FileSystemManager.Instance.GetRootItems(), candidates);
+
+        MemoryFile currentParent = FileSystemManager.Instance.FindParentFolder(aiFile);
+        if (currentParent != null)
+            candidates.Remove(currentParent);
+
+        if (candidates.Count == 0)
+            return null;
+
+        return candidates[Random.Range(0, candidates.Count)];
+    }
+
+    private void CollectExistingFolders(IList<MemoryFile> items, List<MemoryFile> folders)
+    {
+        foreach (MemoryFile item in items)
+        {
+            if (item.isDeleted || !item.isFolder) continue;
+
+            folders.Add(item);
+            CollectExistingFolders(item.children, folders);
+        }
+    }
+
+    private bool FileOrDescendantIsAi(MemoryFile file)
+    {
+        if (file == null) return false;
+        if (file.memoryId == "ai") return true;
+
+        foreach (MemoryFile child in file.children)
+        {
+            if (FileOrDescendantIsAi(child))
+                return true;
+        }
+        return false;
     }
 
     public void ClampIconToDesktop(DesktopIcon icon)
