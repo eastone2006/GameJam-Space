@@ -7,12 +7,16 @@ public class FileSystemManager : MonoBehaviour
     public static FileSystemManager Instance { get; private set; }
 
     [Header("Configuration")]
-    [SerializeField] private float totalSpace = 100f;
     [SerializeField] private float initialAvailableSpace = 0.5f;
+    [SerializeField] private float displayTotalSpace = 100f;
     [SerializeField] private bool persistAcrossScenes = true;
     [SerializeField] private List<MemoryFile> desktopItems = new List<MemoryFile>();
 
-    public float TotalSpace => totalSpace;
+    [Header("Auto Generate Junk")]
+    [SerializeField] private bool autoGenerateJunkFiles = true;
+    [SerializeField] private List<JunkFileTemplate> junkTemplates = new List<JunkFileTemplate>();
+
+    public float TotalSpace => displayTotalSpace;
     public float AvailableSpace { get; private set; }
     public IReadOnlyList<MemoryFile> DesktopItems => desktopItems;
 
@@ -31,7 +35,10 @@ public class FileSystemManager : MonoBehaviour
         if (persistAcrossScenes)
             DontDestroyOnLoad(gameObject);
 
-        AvailableSpace = Mathf.Clamp(initialAvailableSpace, 0f, totalSpace);
+        AvailableSpace = Mathf.Max(0f, initialAvailableSpace);
+
+        if (autoGenerateJunkFiles && desktopItems.Count == 0)
+            GenerateDefaultJunkFiles();
     }
 
     private void OnDestroy()
@@ -59,7 +66,7 @@ public class FileSystemManager : MonoBehaviour
 
         DeleteRecursive(file);
 
-        AvailableSpace = Mathf.Clamp(AvailableSpace + freedSize, 0f, totalSpace);
+        AvailableSpace += freedSize;
 
         OnFileDeleted?.Invoke(file);
 
@@ -69,6 +76,35 @@ public class FileSystemManager : MonoBehaviour
         FireCoreMemoryEventsRecursive(file);
 
         return true;
+    }
+
+    public void GenerateDefaultJunkFiles()
+    {
+        List<JunkFileTemplate> templates = junkTemplates.Count > 0
+            ? junkTemplates
+            : new List<JunkFileTemplate>
+            {
+                new JunkFileTemplate { fileName = "Assignments", size = 12f },
+                new JunkFileTemplate { fileName = "Screenshots", size = 25f },
+                new JunkFileTemplate { fileName = "TempLog", size = 8f },
+                new JunkFileTemplate { fileName = "OldProjects", size = 40f },
+                new JunkFileTemplate { fileName = "SetupCache", size = 15f },
+                new JunkFileTemplate { fileName = "DownloadedClips", size = 18f }
+            };
+
+        foreach (JunkFileTemplate template in templates)
+        {
+            desktopItems.Add(new MemoryFile
+            {
+                fileName = template.fileName,
+                memoryId = "",
+                fileIcon = null,
+                type = MemoryType.JunkFile,
+                size = template.size,
+                isDeleted = false,
+                isFolder = false
+            });
+        }
     }
 
     private void DeleteRecursive(MemoryFile file)
@@ -107,4 +143,11 @@ public class FileSystemManager : MonoBehaviour
         }
         return null;
     }
+}
+
+[Serializable]
+public class JunkFileTemplate
+{
+    public string fileName;
+    public float size;
 }

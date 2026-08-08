@@ -19,6 +19,8 @@ public class MemoryFile
     public float size;
     public bool isDeleted;
     public bool isFolder;
+    public Vector2 savedPosition;
+    public bool hasSavedPosition;
     public List<MemoryFile> children = new List<MemoryFile>();
 
     public float TotalSize

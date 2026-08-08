@@ -28,6 +28,14 @@ public class DesktopUIManager : MonoBehaviour
     [SerializeField] private Button confirmYesButton;
     [SerializeField] private Button confirmNoButton;
 
+    [Header("Desktop Layout")]
+    [SerializeField] private KeyCode resetLayoutKey = KeyCode.R;
+    [SerializeField] private int iconsPerRow = 5;
+    [SerializeField] private float horizontalSpacing = 20f;
+    [SerializeField] private float verticalSpacing = 20f;
+    [SerializeField] private float paddingTop = 20f;
+    [SerializeField] private float paddingLeft = 20f;
+
     public Canvas Canvas => canvas;
 
     private readonly Stack<MemoryFile> folderStack = new Stack<MemoryFile>();
@@ -62,11 +70,35 @@ public class DesktopUIManager : MonoBehaviour
             FileSystemManager.Instance.OnFileDeleted -= HandleFileDeleted;
     }
 
+    private void Update()
+    {
+        if (Input.GetKeyDown(resetLayoutKey))
+            ResetDesktopLayout();
+    }
+
     private void HandleFileDeleted(MemoryFile file)
     {
-        selectedIcon = null;
-        RefreshGrid();
+        DesktopIcon icon = FindIconByFile(file);
+        if (icon != null)
+        {
+            if (selectedIcon == icon)
+                selectedIcon = null;
+
+            Destroy(icon.gameObject);
+        }
+
         RefreshSpaceText();
+    }
+
+    private DesktopIcon FindIconByFile(MemoryFile file)
+    {
+        foreach (Transform child in gridRoot)
+        {
+            DesktopIcon icon = child.GetComponent<DesktopIcon>();
+            if (icon != null && icon.File == file)
+                return icon;
+        }
+        return null;
     }
 
     private void ShowRoot()
@@ -100,6 +132,7 @@ public class DesktopUIManager : MonoBehaviour
             Destroy(gridRoot.GetChild(i).gameObject);
 
         IReadOnlyList<MemoryFile> items = GetCurrentItems();
+        int index = 0;
         foreach (MemoryFile file in items)
         {
             if (file.isDeleted) continue;
@@ -112,7 +145,38 @@ public class DesktopUIManager : MonoBehaviour
                 iconSprite = file.isFolder ? defaultFolderIcon : defaultFileIcon;
 
             icon.Setup(this, file, iconSprite);
+
+            RectTransform rect = icon.Rect;
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+
+            Vector2 gridPosition = GetGridPosition(index);
+            icon.SetDefaultPosition(gridPosition);
+
+            if (file.hasSavedPosition)
+                rect.anchoredPosition = file.savedPosition;
+            else
+                rect.anchoredPosition = gridPosition;
+
+            index++;
         }
+    }
+
+    private Vector2 GetGridPosition(int index)
+    {
+        Rect bounds = gridRoot.rect;
+        Vector2 iconSize = desktopIconPrefab.GetComponent<RectTransform>().sizeDelta;
+        float cellWidth = iconSize.x + horizontalSpacing;
+        float cellHeight = iconSize.y + verticalSpacing;
+
+        int columns = Mathf.Max(1, iconsPerRow);
+        int row = index / columns;
+        int col = index % columns;
+
+        float startX = bounds.xMin + paddingLeft + iconSize.x * 0.5f;
+        float startY = bounds.yMax - paddingTop - iconSize.y * 0.5f;
+
+        return new Vector2(startX + col * cellWidth, startY - row * cellHeight);
     }
 
     private IReadOnlyList<MemoryFile> GetCurrentItems()
@@ -131,7 +195,7 @@ public class DesktopUIManager : MonoBehaviour
     private void RefreshSpaceText()
     {
         if (spaceText == null) return;
-        spaceText.text = string.Format("剩余空间: {0} / {1} MB",
+        spaceText.text = string.Format("Available Space: {0} / {1} MB",
             FileSystemManager.Instance.AvailableSpace.ToString("F0"),
             FileSystemManager.Instance.TotalSpace.ToString("F0"));
     }
@@ -193,8 +257,6 @@ public class DesktopUIManager : MonoBehaviour
             RequestConfirmDelete(icon);
             return;
         }
-
-        StartCoroutine(AnimateIconBack(icon));
     }
 
     public void RequestConfirmDeleteFromBin()
@@ -211,7 +273,7 @@ public class DesktopUIManager : MonoBehaviour
         pendingIcon = icon;
 
         if (confirmMessageText != null)
-            confirmMessageText.text = "确定要永久删除「" + icon.File.fileName + "」吗？";
+            confirmMessageText.text = "Are you sure you want to permanently delete \"" + icon.File.fileName + "\"?";
 
         confirmPanel.SetActive(true);
     }
@@ -239,51 +301,59 @@ public class DesktopUIManager : MonoBehaviour
         draggedIcon = null;
 
         if (icon != null)
-            StartCoroutine(AnimateIconBack(icon));
+            StartCoroutine(AnimateIconTo(icon, icon.DragStartPosition));
     }
 
-    private IEnumerator AnimateIconBack(DesktopIcon icon)
+    private IEnumerator AnimateIconTo(DesktopIcon icon, Vector2 targetPosition)
     {
         if (icon == null || icon.Rect == null) yield break;
 
         RectTransform rect = icon.Rect;
         Vector2 start = rect.anchoredPosition;
-        Vector2 target = GetCellAnchoredPosition(icon.OriginalSiblingIndex);
 
         float duration = 0.2f;
         float t = 0f;
         while (t < 1f)
         {
             t += Time.deltaTime / duration;
-            rect.anchoredPosition = Vector2.Lerp(start, target, Mathf.SmoothStep(0f, 1f, t));
+            rect.anchoredPosition = Vector2.Lerp(start, targetPosition, Mathf.SmoothStep(0f, 1f, t));
             yield return null;
         }
 
-        icon.transform.SetSiblingIndex(icon.OriginalSiblingIndex);
+        rect.anchoredPosition = targetPosition;
+        icon.SavePosition();
+    }
+
+    public Rect GetDesktopBounds()
+    {
+        return gridRoot.rect;
+    }
+
+    public void ResetDesktopLayout()
+    {
+        int index = 0;
+        foreach (Transform child in gridRoot)
+        {
+            DesktopIcon icon = child.GetComponent<DesktopIcon>();
+            if (icon == null) continue;
+
+            Vector2 gridPosition = GetGridPosition(index);
+            icon.SetDefaultPosition(gridPosition);
+            icon.Rect.anchoredPosition = gridPosition;
+
+            if (icon.File != null)
+            {
+                icon.File.savedPosition = gridPosition;
+                icon.File.hasSavedPosition = true;
+            }
+
+            index++;
+        }
     }
 
     private bool IsPointerOverRecycleBin()
     {
         if (recycleBinRect == null) return false;
         return RectTransformUtility.RectangleContainsScreenPoint(recycleBinRect, Input.mousePosition, null);
-    }
-
-    private Vector2 GetCellAnchoredPosition(int index)
-    {
-        GridLayoutGroup grid = gridRoot.GetComponent<GridLayoutGroup>();
-        if (grid == null) return Vector2.zero;
-
-        Rect rect = gridRoot.rect;
-        Vector2 cellStep = grid.cellSize + grid.spacing;
-
-        int columns = Mathf.Max(1, Mathf.FloorToInt((rect.width + grid.spacing.x) / cellStep.x));
-        int row = index / columns;
-        int col = index % columns;
-
-        Vector2 start = new Vector2(
-            rect.xMin + grid.padding.left + grid.cellSize.x * 0.5f,
-            rect.yMax - grid.padding.top - grid.cellSize.y * 0.5f);
-
-        return start + new Vector2(col * cellStep.x, -row * cellStep.y);
     }
 }
