@@ -1,19 +1,16 @@
-using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class DesktopUIManager : MonoBehaviour
+public class DesktopUIManager : MonoBehaviour, IIconHost
 {
     [Header("Desktop References")]
     [SerializeField] private Canvas canvas;
     [SerializeField] private RectTransform gridRoot;
     [SerializeField] private GameObject desktopIconPrefab;
-    [SerializeField] private Button backButton;
     [SerializeField] private TextMeshProUGUI spaceText;
     [SerializeField] private TextMeshProUGUI pathText;
-    [SerializeField] private RectTransform recycleBinRect;
 
     [Header("Default Icons")]
     [SerializeField] private Sprite defaultFolderIcon;
@@ -21,12 +18,6 @@ public class DesktopUIManager : MonoBehaviour
 
     [Header("Path Display")]
     [SerializeField] private string rootPathLabel = "M:\\Desktop\\";
-
-    [Header("Confirm Dialog")]
-    [SerializeField] private GameObject confirmPanel;
-    [SerializeField] private TextMeshProUGUI confirmMessageText;
-    [SerializeField] private Button confirmYesButton;
-    [SerializeField] private Button confirmNoButton;
 
     [Header("Desktop Layout")]
     [SerializeField] private KeyCode resetLayoutKey = KeyCode.R;
@@ -37,12 +28,11 @@ public class DesktopUIManager : MonoBehaviour
     [SerializeField] private float paddingLeft = 20f;
 
     public Canvas Canvas => canvas;
+    public RectTransform ContentRoot => gridRoot;
+    public IList<MemoryFile> CurrentItems => FileSystemManager.Instance.GetRootItems();
+    public string RootPathLabel => rootPathLabel;
 
-    private readonly Stack<MemoryFile> folderStack = new Stack<MemoryFile>();
-    private DesktopIcon draggedIcon;
     private DesktopIcon selectedIcon;
-    private DesktopIcon pendingIcon;
-    private bool awaitingConfirm;
 
     private void Start()
     {
@@ -52,22 +42,11 @@ public class DesktopUIManager : MonoBehaviour
             return;
         }
 
-        backButton.onClick.AddListener(GoBack);
-        confirmYesButton.onClick.AddListener(OnConfirmYes);
-        confirmNoButton.onClick.AddListener(OnConfirmNo);
-        confirmPanel.SetActive(false);
-
-        FileSystemManager.Instance.OnFileDeleted += HandleFileDeleted;
-
-        ShowRoot();
+        RefreshIcons();
         RefreshSpaceText();
-        RefreshPathText();
-    }
 
-    private void OnDestroy()
-    {
-        if (FileSystemManager.Instance != null)
-            FileSystemManager.Instance.OnFileDeleted -= HandleFileDeleted;
+        if (pathText != null)
+            pathText.text = rootPathLabel;
     }
 
     private void Update()
@@ -76,90 +55,41 @@ public class DesktopUIManager : MonoBehaviour
             ResetDesktopLayout();
     }
 
-    private void HandleFileDeleted(MemoryFile file)
-    {
-        DesktopIcon icon = FindIconByFile(file);
-        if (icon != null)
-        {
-            if (selectedIcon == icon)
-                selectedIcon = null;
-
-            Destroy(icon.gameObject);
-        }
-
-        RefreshSpaceText();
-    }
-
-    private DesktopIcon FindIconByFile(MemoryFile file)
-    {
-        foreach (Transform child in gridRoot)
-        {
-            DesktopIcon icon = child.GetComponent<DesktopIcon>();
-            if (icon != null && icon.File == file)
-                return icon;
-        }
-        return null;
-    }
-
-    private void ShowRoot()
-    {
-        folderStack.Clear();
-        RefreshGrid();
-        RefreshBackButton();
-        RefreshPathText();
-    }
-
-    private void ShowFolder(MemoryFile folder)
-    {
-        folderStack.Push(folder);
-        RefreshGrid();
-        RefreshBackButton();
-        RefreshPathText();
-    }
-
-    private void GoBack()
-    {
-        if (folderStack.Count == 0) return;
-        folderStack.Pop();
-        RefreshGrid();
-        RefreshBackButton();
-        RefreshPathText();
-    }
-
-    private void RefreshGrid()
+    public void RefreshIcons()
     {
         for (int i = gridRoot.childCount - 1; i >= 0; i--)
             Destroy(gridRoot.GetChild(i).gameObject);
+        selectedIcon = null;
 
-        IReadOnlyList<MemoryFile> items = GetCurrentItems();
         int index = 0;
-        foreach (MemoryFile file in items)
+        foreach (MemoryFile file in CurrentItems)
         {
             if (file.isDeleted) continue;
 
-            GameObject go = Instantiate(desktopIconPrefab, gridRoot);
-            DesktopIcon icon = go.GetComponent<DesktopIcon>();
-
-            Sprite iconSprite = file.fileIcon;
-            if (iconSprite == null)
-                iconSprite = file.isFolder ? defaultFolderIcon : defaultFileIcon;
-
-            icon.Setup(this, file, iconSprite);
-
-            RectTransform rect = icon.Rect;
-            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
-            rect.pivot = new Vector2(0.5f, 0.5f);
-
-            Vector2 gridPosition = GetGridPosition(index);
-            icon.SetDefaultPosition(gridPosition);
-
-            if (file.hasSavedPosition)
-                rect.anchoredPosition = file.savedPosition;
-            else
-                rect.anchoredPosition = gridPosition;
-
+            CreateIcon(file, index);
             index++;
         }
+    }
+
+    private void CreateIcon(MemoryFile file, int index)
+    {
+        GameObject go = Instantiate(desktopIconPrefab, gridRoot);
+        DesktopIcon icon = go.GetComponent<DesktopIcon>();
+
+        Sprite sprite = file.fileIcon;
+        if (sprite == null)
+            sprite = file.isFolder ? defaultFolderIcon : defaultFileIcon;
+
+        icon.Setup(this, file, sprite);
+
+        RectTransform rect = icon.Rect;
+        rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+
+        Vector2 gridPosition = GetGridPosition(index);
+        icon.SetDefaultPosition(gridPosition);
+
+        rect.anchoredPosition = file.hasSavedPosition ? file.savedPosition : gridPosition;
     }
 
     private Vector2 GetGridPosition(int index)
@@ -177,156 +107,6 @@ public class DesktopUIManager : MonoBehaviour
         float startY = bounds.yMax - paddingTop - iconSize.y * 0.5f;
 
         return new Vector2(startX + col * cellWidth, startY - row * cellHeight);
-    }
-
-    private IReadOnlyList<MemoryFile> GetCurrentItems()
-    {
-        if (folderStack.Count > 0)
-            return folderStack.Peek().children;
-        return FileSystemManager.Instance.DesktopItems;
-    }
-
-    private void RefreshBackButton()
-    {
-        if (backButton == null) return;
-        backButton.gameObject.SetActive(folderStack.Count > 0);
-    }
-
-    private void RefreshSpaceText()
-    {
-        if (spaceText == null) return;
-        spaceText.text = string.Format("Available Space: {0} / {1} MB",
-            FileSystemManager.Instance.AvailableSpace.ToString("F0"),
-            FileSystemManager.Instance.TotalSpace.ToString("F0"));
-    }
-
-    private void RefreshPathText()
-    {
-        if (pathText == null) return;
-
-        List<string> segments = new List<string>();
-        foreach (MemoryFile folder in folderStack)
-            segments.Add(folder.fileName);
-
-        segments.Reverse();
-
-        char separator = rootPathLabel.Contains("\\") ? '\\' : '/';
-
-        string root = rootPathLabel;
-        if (!root.EndsWith("/") && !root.EndsWith("\\"))
-            root += separator;
-
-        string path = root;
-        if (segments.Count > 0)
-            path += string.Join(separator.ToString(), segments);
-
-        pathText.text = path;
-    }
-
-    public void OnIconClicked(DesktopIcon icon)
-    {
-        if (icon == null || icon == selectedIcon) return;
-
-        selectedIcon = icon;
-        foreach (Transform child in gridRoot)
-        {
-            DesktopIcon existing = child.GetComponent<DesktopIcon>();
-            if (existing != null)
-                existing.SetSelected(existing == icon);
-        }
-    }
-
-    public void OnIconDoubleClicked(DesktopIcon icon)
-    {
-        if (icon == null || icon.File == null) return;
-        if (icon.File.isFolder)
-            ShowFolder(icon.File);
-    }
-
-    public void OnIconDragBegin(DesktopIcon icon)
-    {
-        draggedIcon = icon;
-    }
-
-    public void OnIconDragEnd(DesktopIcon icon)
-    {
-        if (awaitingConfirm) return;
-
-        if (IsPointerOverRecycleBin())
-        {
-            RequestConfirmDelete(icon);
-            return;
-        }
-    }
-
-    public void RequestConfirmDeleteFromBin()
-    {
-        if (draggedIcon != null && !awaitingConfirm)
-            RequestConfirmDelete(draggedIcon);
-    }
-
-    private void RequestConfirmDelete(DesktopIcon icon)
-    {
-        if (icon == null || icon.File == null) return;
-
-        awaitingConfirm = true;
-        pendingIcon = icon;
-
-        if (confirmMessageText != null)
-            confirmMessageText.text = "Are you sure you want to permanently delete \"" + icon.File.fileName + "\"?";
-
-        confirmPanel.SetActive(true);
-    }
-
-    public void OnConfirmYes()
-    {
-        awaitingConfirm = false;
-        confirmPanel.SetActive(false);
-
-        MemoryFile target = pendingIcon != null ? pendingIcon.File : null;
-        pendingIcon = null;
-        draggedIcon = null;
-
-        if (target != null)
-            FileSystemManager.Instance.TryDeleteFile(target);
-    }
-
-    public void OnConfirmNo()
-    {
-        awaitingConfirm = false;
-        confirmPanel.SetActive(false);
-
-        DesktopIcon icon = pendingIcon;
-        pendingIcon = null;
-        draggedIcon = null;
-
-        if (icon != null)
-            StartCoroutine(AnimateIconTo(icon, icon.DragStartPosition));
-    }
-
-    private IEnumerator AnimateIconTo(DesktopIcon icon, Vector2 targetPosition)
-    {
-        if (icon == null || icon.Rect == null) yield break;
-
-        RectTransform rect = icon.Rect;
-        Vector2 start = rect.anchoredPosition;
-
-        float duration = 0.2f;
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.deltaTime / duration;
-            rect.anchoredPosition = Vector2.Lerp(start, targetPosition, Mathf.SmoothStep(0f, 1f, t));
-            yield return null;
-        }
-
-        rect.anchoredPosition = targetPosition;
-        icon.SavePosition();
-    }
-
-    public Rect GetDesktopBounds()
-    {
-        return gridRoot.rect;
     }
 
     public void ResetDesktopLayout()
@@ -351,9 +131,30 @@ public class DesktopUIManager : MonoBehaviour
         }
     }
 
-    private bool IsPointerOverRecycleBin()
+    public void RefreshSpaceText()
     {
-        if (recycleBinRect == null) return false;
-        return RectTransformUtility.RectangleContainsScreenPoint(recycleBinRect, Input.mousePosition, null);
+        if (spaceText == null) return;
+        spaceText.text = string.Format("Available Space: {0} / {1} MB",
+            FileSystemManager.Instance.AvailableSpace.ToString("F0"),
+            FileSystemManager.Instance.TotalSpace.ToString("F0"));
+    }
+
+    public void OnIconClicked(DesktopIcon icon)
+    {
+        if (icon == null || icon == selectedIcon) return;
+
+        selectedIcon = icon;
+        foreach (Transform child in gridRoot)
+        {
+            DesktopIcon existing = child.GetComponent<DesktopIcon>();
+            if (existing != null)
+                existing.SetSelected(existing == icon);
+        }
+    }
+
+    public void OnIconDoubleClicked(DesktopIcon icon)
+    {
+        if (icon == null || icon.File == null || !icon.File.isFolder) return;
+        WindowManager.Instance.OpenFolderWindow(icon.File);
     }
 }

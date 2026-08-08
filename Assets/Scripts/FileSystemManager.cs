@@ -19,6 +19,7 @@ public class FileSystemManager : MonoBehaviour
     public float TotalSpace => displayTotalSpace;
     public float AvailableSpace { get; private set; }
     public IReadOnlyList<MemoryFile> DesktopItems => desktopItems;
+    public IList<MemoryFile> GetRootItems() => desktopItems;
 
     public event Action<MemoryFile> OnFileDeleted;
     public event Action<MemoryFile> OnCoreMemoryDeleted;
@@ -105,6 +106,95 @@ public class FileSystemManager : MonoBehaviour
                 isFolder = false
             });
         }
+    }
+
+    public void MoveFileToFolder(MemoryFile file, MemoryFile targetFolder)
+    {
+        if (file == null || file == targetFolder) return;
+        if (targetFolder != null && IsWithinSubtree(file, targetFolder)) return;
+
+        IList<MemoryFile> source = FindParentList(file);
+        if (source == null) return;
+
+        source.Remove(file);
+
+        if (targetFolder == null)
+            desktopItems.Add(file);
+        else
+            targetFolder.children.Add(file);
+    }
+
+    public bool IsWithinSubtree(MemoryFile root, MemoryFile candidate)
+    {
+        if (root == candidate) return true;
+        if (!root.isFolder) return false;
+
+        foreach (MemoryFile child in root.children)
+        {
+            if (IsWithinSubtree(child, candidate))
+                return true;
+        }
+        return false;
+    }
+
+    public string GetFolderPath(MemoryFile folder)
+    {
+        if (folder == null) return string.Empty;
+
+        List<string> segments = new List<string>();
+        FindFolderPath(desktopItems, folder, segments);
+        return string.Join("/", segments);
+    }
+
+    private bool FindFolderPath(IList<MemoryFile> list, MemoryFile folder, List<string> segments)
+    {
+        foreach (MemoryFile item in list)
+        {
+            if (item == folder)
+            {
+                segments.Add(item.fileName);
+                return true;
+            }
+
+            if (item.isFolder)
+            {
+                segments.Add(item.fileName);
+                if (FindFolderPath(item.children, folder, segments))
+                    return true;
+                segments.RemoveAt(segments.Count - 1);
+            }
+        }
+        return false;
+    }
+
+    private IList<MemoryFile> FindParentList(MemoryFile file)
+    {
+        if (desktopItems.Contains(file))
+            return desktopItems;
+
+        foreach (MemoryFile item in desktopItems)
+        {
+            IList<MemoryFile> found = FindParentListInChildren(item, file);
+            if (found != null)
+                return found;
+        }
+        return null;
+    }
+
+    private IList<MemoryFile> FindParentListInChildren(MemoryFile folder, MemoryFile file)
+    {
+        if (!folder.isFolder) return null;
+
+        if (folder.children.Contains(file))
+            return folder.children;
+
+        foreach (MemoryFile child in folder.children)
+        {
+            IList<MemoryFile> found = FindParentListInChildren(child, file);
+            if (found != null)
+                return found;
+        }
+        return null;
     }
 
     private void DeleteRecursive(MemoryFile file)

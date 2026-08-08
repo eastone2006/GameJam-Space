@@ -10,13 +10,14 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     [SerializeField] private TextMeshProUGUI nameText;
 
     public MemoryFile File { get; private set; }
+    public IIconHost Host { get; private set; }
     public RectTransform Rect { get; private set; }
     public bool IsDragging { get; private set; }
     public Vector2 DragStartPosition { get; private set; }
     public Vector2 DefaultPosition { get; private set; }
 
     private CanvasGroup canvasGroup;
-    private DesktopUIManager manager;
+    private Transform originalParent;
 
     private void Awake()
     {
@@ -29,9 +30,9 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
             nameText = GetComponentInChildren<TextMeshProUGUI>();
     }
 
-    public void Setup(DesktopUIManager uiManager, MemoryFile file, Sprite iconSprite)
+    public void Setup(IIconHost host, MemoryFile file, Sprite iconSprite)
     {
-        manager = uiManager;
+        Host = host;
         File = file;
 
         if (backgroundImage != null && iconSprite != null)
@@ -56,44 +57,45 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         DefaultPosition = position;
     }
 
+    public void SavePosition()
+    {
+        if (File == null) return;
+        File.savedPosition = Rect.anchoredPosition;
+        File.hasSavedPosition = true;
+    }
+
     public void OnPointerClick(PointerEventData eventData)
     {
-        if (manager == null) return;
+        if (Host == null) return;
 
         if (eventData.clickCount >= 2)
-            manager.OnIconDoubleClicked(this);
+            Host.OnIconDoubleClicked(this);
         else
-            manager.OnIconClicked(this);
+            Host.OnIconClicked(this);
     }
 
     public void OnBeginDrag(PointerEventData eventData)
     {
-        if (manager == null) return;
+        if (Host == null || WindowManager.Instance == null) return;
 
         DragStartPosition = Rect.anchoredPosition;
+        originalParent = transform.parent;
         IsDragging = true;
         canvasGroup.blocksRaycasts = false;
-        manager.OnIconDragBegin(this);
+
+        if (WindowManager.Instance.CanvasRect != null)
+            transform.SetParent(WindowManager.Instance.CanvasRect, true);
+        transform.SetAsLastSibling();
+
+        WindowManager.Instance.OnDragBegin(this);
     }
 
     public void OnDrag(PointerEventData eventData)
     {
-        if (!IsDragging || manager == null) return;
+        if (!IsDragging || WindowManager.Instance == null) return;
 
-        Rect bounds = manager.GetDesktopBounds();
-        float halfWidth = Rect.rect.width * 0.5f;
-        float halfHeight = Rect.rect.height * 0.5f;
-
-        float minX = bounds.xMin + halfWidth;
-        float maxX = bounds.xMax - halfWidth;
-        float minY = bounds.yMin + halfHeight;
-        float maxY = bounds.yMax - halfHeight;
-
-        Vector2 position = Rect.anchoredPosition + eventData.delta / manager.Canvas.scaleFactor;
-        position.x = Mathf.Clamp(position.x, Mathf.Min(minX, maxX), Mathf.Max(minX, maxX));
-        position.y = Mathf.Clamp(position.y, Mathf.Min(minY, maxY), Mathf.Max(minY, maxY));
-
-        Rect.anchoredPosition = position;
+        Rect.anchoredPosition += eventData.delta / WindowManager.Instance.Canvas.scaleFactor;
+        WindowManager.Instance.ClampIconToDesktop(this);
     }
 
     public void OnEndDrag(PointerEventData eventData)
@@ -101,15 +103,18 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         if (!IsDragging) return;
 
         IsDragging = false;
-        canvasGroup.blocksRaycasts = true;
-        SavePosition();
-        manager?.OnIconDragEnd(this);
+        WindowManager.Instance.OnDragEnd(this);
     }
 
-    public void SavePosition()
+    public void ReturnToHost()
     {
-        if (File == null) return;
-        File.savedPosition = Rect.anchoredPosition;
-        File.hasSavedPosition = true;
+        if (originalParent != null)
+        {
+            transform.SetParent(originalParent, true);
+            originalParent = null;
+        }
+
+        canvasGroup.blocksRaycasts = true;
+        SavePosition();
     }
 }
