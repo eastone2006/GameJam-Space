@@ -87,19 +87,40 @@ public class FileSystemManager : MonoBehaviour
 
         desktopItems.Add(CreateFolder("Downloads", MemoryType.JunkFile, null,
             CreateFile("Setup_Files", 18f),
-            CreateFile("Browser_Cache", 9f)));
+            CreateFile("Browser_Cache", 9f),
+            CreateFolder("Installers", MemoryType.JunkFile, null,
+                CreateFile("Patch_1.0", 7f),
+                CreateFile("Patch_1.1", 6f)),
+            CreateFolder("Archives", MemoryType.JunkFile, null,
+                CreateFile("Old_Manual.zip", 13f))));
 
         desktopItems.Add(CreateFolder("Old_Backups", MemoryType.JunkFile, null,
             CreateFile("Backup_2021", 22f),
-            CreateFile("Backup_2022", 26f)));
+            CreateFile("Backup_2022", 26f),
+            CreateFolder("Snapshots", MemoryType.JunkFile, null,
+                CreateFile("Snapshot_Jan", 9f),
+                CreateFile("Snapshot_Mar", 11f)),
+            CreateFolder("Restore_Points", MemoryType.JunkFile, null,
+                CreateFile("RP_001", 4f),
+                CreateFile("RP_002", 5f))));
 
         desktopItems.Add(CreateFolder("System_Temp", MemoryType.JunkFile, null,
             CreateFile("Log_Files", 6f),
-            CreateFile("Dump_Data", 11f)));
+            CreateFile("Dump_Data", 11f),
+            CreateFolder("Crash_Reports", MemoryType.JunkFile, null,
+                CreateFile("Crash_2023", 3f),
+                CreateFile("Crash_2024", 4f)),
+            CreateFolder("Update_Staging", MemoryType.JunkFile, null,
+                CreateFile("Staged_Data", 8f))));
 
         desktopItems.Add(CreateFolder("Cached_Media", MemoryType.JunkFile, null,
             CreateFile("Thumbnails", 5f),
-            CreateFile("Stream_Buffer", 14f)));
+            CreateFile("Stream_Buffer", 14f),
+            CreateFolder("Audio_Cache", MemoryType.JunkFile, null,
+                CreateFile("Preview_Clips", 6f)),
+            CreateFolder("Font_Cache", MemoryType.JunkFile, null,
+                CreateFile("Typeface_Files", 4f),
+                CreateFile("Icon_Set", 3f))));
 
         desktopItems.Add(CreateFolder("Birthday", MemoryType.CoreMemory, "birthday",
             CreateFile("Birthday_Photo_001", 10f),
@@ -151,6 +172,46 @@ public class FileSystemManager : MonoBehaviour
     public bool IsEverythingExceptAiDeleted()
     {
         return CountRemainingNonAi(desktopItems) == 0;
+    }
+
+    public float GetTotalFileSize()
+    {
+        float sum = 0f;
+        foreach (MemoryFile item in desktopItems)
+            sum += SubtreeTotalSize(item);
+        return sum;
+    }
+
+    public float GetDeletedFileSize()
+    {
+        return SumDeletedSize(desktopItems);
+    }
+
+    private float SumDeletedSize(IList<MemoryFile> items)
+    {
+        float sum = 0f;
+        foreach (MemoryFile item in items)
+        {
+            if (item.isDeleted)
+            {
+                sum += SubtreeTotalSize(item);
+            }
+            else if (item.isFolder)
+            {
+                sum += SumDeletedSize(item.children);
+            }
+        }
+        return sum;
+    }
+
+    private float SubtreeTotalSize(MemoryFile item)
+    {
+        if (!item.isFolder) return item.size;
+
+        float sum = 0f;
+        foreach (MemoryFile child in item.children)
+            sum += SubtreeTotalSize(child);
+        return sum;
     }
 
     private int CountRemainingNonAi(IList<MemoryFile> items)

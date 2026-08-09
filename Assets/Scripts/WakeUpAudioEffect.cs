@@ -12,6 +12,30 @@ public class WakeUpAudioEffect : MonoBehaviour
     [SerializeField] private float heartbeatVolume = 0.35f;
     [SerializeField] private float breathingVolume = 0.25f;
 
+    private void Awake()
+    {
+        // 防止 AudioSource 的 Play On Awake 在场景加载时就抢先播放
+        if (heartbeatSource != null)
+        {
+            heartbeatSource.playOnAwake = false;
+            heartbeatSource.Stop();
+        }
+        else
+        {
+            Debug.LogWarning("WakeUpAudioEffect: heartbeatSource 未在 Inspector 中赋值，点击 Start 后将不会播放心跳音。", this);
+        }
+
+        if (breathingSource != null)
+        {
+            breathingSource.playOnAwake = false;
+            breathingSource.Stop();
+        }
+        else
+        {
+            Debug.LogWarning("WakeUpAudioEffect: breathingSource 未在 Inspector 中赋值，点击 Start 后将不会播放呼吸音。", this);
+        }
+    }
+
     private void Start()
     {
         if (GameStartController.Instance != null && GameStartController.IntroPlayed)

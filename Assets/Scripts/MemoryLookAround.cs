@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class MemoryLookAround : MonoBehaviour
 {
-    [SerializeField] private float sensitivity = 100f;
+    [SerializeField] private float sensitivity = 180f;
     [SerializeField] private float verticalLimit = 65f;
 
     private float yaw;

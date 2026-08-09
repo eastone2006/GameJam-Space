@@ -41,6 +41,7 @@ public class ScreenGlitchEffect : MonoBehaviour
     [Tooltip("删除该 memoryId 时只播放音频、不跳场景")]
     [SerializeField] private string mothersVoiceMemoryId = "mothers_voice";
     [SerializeField] private AudioClip mothersVoiceAudio;
+    [SerializeField, Range(0f, 1f)] private float mothersVoiceVolume = 1f;
 
     public static bool PendingMemoryTransition { get; private set; }
 
@@ -112,8 +113,14 @@ public class ScreenGlitchEffect : MonoBehaviour
 
     private void PlayMothersVoiceAudio()
     {
-        if (audioSource != null && mothersVoiceAudio != null)
-            audioSource.PlayOneShot(mothersVoiceAudio);
+        if (audioSource == null || mothersVoiceAudio == null) return;
+
+        if (glitchRoutine != null)
+            StopCoroutine(glitchRoutine);
+        glitchRoutine = null;
+
+        audioSource.volume = mothersVoiceVolume;
+        audioSource.PlayOneShot(mothersVoiceAudio);
     }
 
     public void TriggerMemoryTransition(string sceneName)

@@ -70,8 +70,11 @@ public class DesktopUIManager : IconHostBase
     public void RefreshSpaceText()
     {
         if (spaceText == null) return;
-        spaceText.text = string.Format("Available Space: {0}",
-            FileSystemManager.Instance.AvailableSpace.ToString("F1"),
-            FileSystemManager.Instance.TotalSpace.ToString("F1"));
+
+        float total = FileSystemManager.Instance.GetTotalFileSize();
+        float deleted = FileSystemManager.Instance.GetDeletedFileSize();
+        float percent = total > 0f ? deleted / total * 100f : 0f;
+
+        spaceText.text = string.Format("Freed: {0}%", percent.ToString("F1"));
     }
 }
