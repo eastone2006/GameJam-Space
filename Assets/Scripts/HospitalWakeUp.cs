@@ -16,16 +16,29 @@ public class HospitalWakeUp : MonoBehaviour
             return;
         }
 
+        if (GameStartController.Instance != null && GameStartController.IntroPlayed)
+        {
+            whiteFadeImage.gameObject.SetActive(false);
+            SetAlpha(0f);
+            return;
+        }
+
         whiteFadeImage.gameObject.SetActive(true);
         SetAlpha(1f);
     }
 
     private void Start()
     {
-        if (whiteFadeImage != null)
+        if (whiteFadeImage == null) return;
+
+        if (GameStartController.Instance != null && GameStartController.IntroPlayed)
         {
-            StartCoroutine(WakeUp());
+            whiteFadeImage.gameObject.SetActive(false);
+            SetAlpha(0f);
+            return;
         }
+
+        StartCoroutine(GameStartController.RunAfterStart(WakeUp()));
     }
 
     private IEnumerator WakeUp()
@@ -48,6 +61,7 @@ public class HospitalWakeUp : MonoBehaviour
 
         SetAlpha(0f);
         whiteFadeImage.gameObject.SetActive(false);
+        GameStartController.MarkIntroPlayed();
     }
 
     private void SetAlpha(float alpha)

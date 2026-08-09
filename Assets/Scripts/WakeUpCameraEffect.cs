@@ -19,7 +19,10 @@ public class WakeUpCameraEffect : MonoBehaviour
 
     private void Start()
     {
-        StartCoroutine(WakeUpMovement());
+        if (GameStartController.Instance != null && GameStartController.IntroPlayed)
+            return;
+
+        StartCoroutine(GameStartController.RunAfterStart(WakeUpMovement()));
     }
 
     private IEnumerator WakeUpMovement()

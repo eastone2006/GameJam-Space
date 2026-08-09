@@ -7,23 +7,16 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    [Header("Ending Scenes")]
-    [SerializeField] private string awakeningSceneName = "Hospital";
-    [SerializeField] private string questionSceneName = "QuestionEnding";
-
-    [Header("AI Ending Threshold")]
-    [Tooltip("删除 AI 时，剩余空间达到总容量的该比例即触发苏醒结局")]
-    [SerializeField] private float awakeningSpaceRatio = 0.8f;
+    [Header("Ending Scene")]
+    [Tooltip("两种结局（删掉除 AI 外所有文件 / 删掉 AI）都跳转到的医院场景")]
+    [SerializeField] private string endingSceneName = "HospitalScene_B";
 
     [Header("Memory IDs")]
     [SerializeField] private string aiMemoryId = "ai";
-    [SerializeField] private List<string> coreMemoryIds = new List<string>
-    {
-        "birthday",
-        "mothers_voice",
-        "graduation",
-        "travel"
-    };
+
+    [Header("All-Deleted Ending")]
+    [Tooltip("全部文件（除 AI）删完后，延迟多少秒再跳结局（给记忆音频/转场留时间）")]
+    [SerializeField] private float endingAllDelay = 1.5f;
 
     [Header("Lifecycle")]
     [SerializeField] private bool persistAcrossScenes = true;
@@ -34,6 +27,9 @@ public class GameManager : MonoBehaviour
     private readonly HashSet<string> deletedMemories = new HashSet<string>();
 
     public IReadOnlyCollection<string> DeletedMemories => deletedMemories;
+
+    private bool pendingAllDeletedEnding;
+    private float allDeletedWaitUntil;
 
     private void Awake()
     {
@@ -53,20 +49,36 @@ public class GameManager : MonoBehaviour
         if (FileSystemManager.Instance != null)
         {
             FileSystemManager.Instance.OnCoreMemoryDeleted += HandleCoreMemoryDeleted;
+            FileSystemManager.Instance.OnFileDeleted += HandleFileDeleted;
         }
         else
         {
-            Debug.LogError("GameManager: FileSystemManager 不存在，无法监听核心记忆删除事件。");
+            Debug.LogError("GameManager: FileSystemManager 不存在，无法监听删除事件。");
         }
     }
 
     private void OnDestroy()
     {
         if (FileSystemManager.Instance != null)
+        {
             FileSystemManager.Instance.OnCoreMemoryDeleted -= HandleCoreMemoryDeleted;
+            FileSystemManager.Instance.OnFileDeleted -= HandleFileDeleted;
+        }
 
         if (Instance == this)
             Instance = null;
+    }
+
+    private void Update()
+    {
+        if (!pendingAllDeletedEnding) return;
+
+        // 记忆场景转场进行中时先不跳结局，等回到主场景再说
+        if (ScreenGlitchEffect.PendingMemoryTransition) return;
+        if (Time.time < allDeletedWaitUntil) return;
+
+        pendingAllDeletedEnding = false;
+        TriggerEnding("all_deleted");
     }
 
     private void HandleCoreMemoryDeleted(MemoryFile file)
@@ -76,40 +88,22 @@ public class GameManager : MonoBehaviour
         deletedMemories.Add(file.memoryId);
 
         if (file.memoryId == aiMemoryId)
-        {
             HandleAiDeleted();
-            return;
-        }
+    }
 
-        if (AreAllCoreMemoriesDeleted())
-            TriggerEnding("question");
+    private void HandleFileDeleted(MemoryFile file)
+    {
+        if (FileSystemManager.Instance != null
+            && FileSystemManager.Instance.IsEverythingExceptAiDeleted())
+        {
+            pendingAllDeletedEnding = true;
+            allDeletedWaitUntil = Time.time + endingAllDelay;
+        }
     }
 
     private void HandleAiDeleted()
     {
-        float totalSpace = FileSystemManager.Instance.TotalSpace;
-        float availableRatio = totalSpace > 0f
-            ? FileSystemManager.Instance.AvailableSpace / totalSpace
-            : 0f;
-
-        if (availableRatio >= awakeningSpaceRatio)
-        {
-            TriggerEnding("awakening");
-        }
-        else
-        {
-            OnAiInducementFailed?.Invoke();
-        }
-    }
-
-    private bool AreAllCoreMemoriesDeleted()
-    {
-        foreach (string id in coreMemoryIds)
-        {
-            if (!deletedMemories.Contains(id))
-                return false;
-        }
-        return true;
+        TriggerEnding("awakening");
     }
 
     public void TriggerEnding(string endingType)
@@ -119,10 +113,8 @@ public class GameManager : MonoBehaviour
         switch (endingType)
         {
             case "awakening":
-                LoadScene(awakeningSceneName);
-                break;
-            case "question":
-                LoadScene(questionSceneName);
+            case "all_deleted":
+                LoadScene(endingSceneName);
                 break;
             default:
                 Debug.LogWarning("GameManager: 未知结局类型 \"" + endingType + "\"");

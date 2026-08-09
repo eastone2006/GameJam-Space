@@ -1,7 +1,7 @@
+using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
-using TMPro;
 
 [RequireComponent(typeof(CanvasGroup))]
 public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler
@@ -17,12 +17,14 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     public Vector2 DefaultPosition { get; private set; }
 
     private CanvasGroup canvasGroup;
+    private Canvas canvas;
     private Transform originalParent;
 
     private void Awake()
     {
         Rect = GetComponent<RectTransform>();
         canvasGroup = GetComponent<CanvasGroup>();
+        canvas = GetComponentInParent<Canvas>();
 
         if (backgroundImage == null)
             backgroundImage = GetComponent<Image>();
@@ -40,8 +42,8 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         if (nameText != null)
             nameText.text = file.isFolder
-                ? string.Format("{0}\n{1} MB", file.fileName, file.TotalSize.ToString("F0"))
-                : string.Format("{0}\n{1} MB", file.fileName, file.size.ToString("F0"));
+                ? string.Format("{0}\n{1} MB", file.fileName, file.TotalSize.ToString("F1"))
+                : string.Format("{0}\n{1} MB", file.fileName, file.size.ToString("F1"));
     }
 
     public void SetSelected(bool selected)
@@ -89,8 +91,9 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
         IsDragging = true;
         canvasGroup.blocksRaycasts = false;
 
-        if (WindowManager.Instance.CanvasRect != null)
-            transform.SetParent(WindowManager.Instance.CanvasRect, true);
+        Canvas dragCanvas = GetCanvas();
+        if (dragCanvas != null)
+            transform.SetParent(dragCanvas.transform, true);
         transform.SetAsLastSibling();
 
         WindowManager.Instance.OnDragBegin(this);
@@ -100,7 +103,10 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
     {
         if (!IsDragging || WindowManager.Instance == null) return;
 
-        Rect.anchoredPosition += eventData.delta / WindowManager.Instance.Canvas.scaleFactor;
+        Canvas dragCanvas = GetCanvas();
+        float scaleFactor = dragCanvas != null ? dragCanvas.scaleFactor : 1f;
+
+        Rect.anchoredPosition += eventData.delta / scaleFactor;
         WindowManager.Instance.ClampIconToDesktop(this);
     }
 
@@ -122,5 +128,12 @@ public class DesktopIcon : MonoBehaviour, IPointerClickHandler, IBeginDragHandle
 
         canvasGroup.blocksRaycasts = true;
         SavePosition();
+    }
+
+    private Canvas GetCanvas()
+    {
+        if (canvas != null) return canvas;
+        canvas = GetComponentInParent<Canvas>();
+        return canvas;
     }
 }

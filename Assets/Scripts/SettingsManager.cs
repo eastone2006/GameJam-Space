@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
 
 public class SettingsManager : MonoBehaviour
 {
@@ -12,17 +10,12 @@ public class SettingsManager : MonoBehaviour
 
     void Start()
     {
-        
-        List<string> options = new List<string>();
-        int currentResIndex = 0;
-
-
-        // 2. 游戏启动时，读取并应用玩家保存的设置
-        LoadSettings(currentResIndex);
+        // 游戏启动时，读取并应用玩家保存的设置
+        LoadSettings();
     }
 
     // --- 读取逻辑 ---
-    private void LoadSettings(int defaultResIndex)
+    private void LoadSettings()
     {
         // 读取音量：如果没有保存过（第一次玩），默认给 1f (最大声)
         float savedVolume = PlayerPrefs.GetFloat("MasterVolume", 1f);

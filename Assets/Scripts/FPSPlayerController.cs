@@ -27,6 +27,9 @@ public class FPSPlayerController : MonoBehaviour
 
     private void Start()
     {
+        if (GameStartController.Instance != null && !GameStartController.HasStarted)
+            return;
+
         SetCursorCaptured(true);
     }
 

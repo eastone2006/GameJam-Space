@@ -1,5 +1,8 @@
+using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 public class ScreenGlitchEffect : MonoBehaviour
@@ -21,10 +24,27 @@ public class ScreenGlitchEffect : MonoBehaviour
     [Header("Intensity")]
     [SerializeField] private float maxOffset = 28f;
     [SerializeField] private float maxAlpha = 0.3f;
-    [Tooltip("特效与花屏声的持续时间（秒）")]
-    [SerializeField] private float glitchDuration = 10f;
+    [Tooltip("花屏加重/消失的持续时间（秒）")]
+    [SerializeField] private float glitchDuration = 2f;
     [SerializeField] private float minFlickerInterval = 0.02f;
     [SerializeField] private float maxFlickerInterval = 0.06f;
+
+    [Header("Memory Scene Mapping")]
+    [Tooltip("核心记忆 memoryId 对应的记忆场景名（删除后花屏加重并进入该场景，播完回 Warehouse）")]
+    [SerializeField] private List<MemorySceneMapping> memoryScenes = new List<MemorySceneMapping>
+    {
+        new MemorySceneMapping { memoryId = "birthday", sceneName = "BirthdayScene_B" },
+        new MemorySceneMapping { memoryId = "travel", sceneName = "TravelMemoryScene_B" }
+    };
+
+    [Header("Mothers Voice")]
+    [Tooltip("删除该 memoryId 时只播放音频、不跳场景")]
+    [SerializeField] private string mothersVoiceMemoryId = "mothers_voice";
+    [SerializeField] private AudioClip mothersVoiceAudio;
+
+    public static bool PendingMemoryTransition { get; private set; }
+
+    private static bool returningFromMemory;
 
     private Coroutine glitchRoutine;
 
@@ -43,7 +63,21 @@ public class ScreenGlitchEffect : MonoBehaviour
         if (FileSystemManager.Instance != null)
             FileSystemManager.Instance.OnCoreMemoryDeleted += HandleCoreMemoryDeleted;
 
+        PendingMemoryTransition = false;
+
+        // 花屏遮罩绝不拦截输入，保证特效期间玩家仍可点击/操作
+        if (glitchOverlay != null)
+            glitchOverlay.raycastTarget = false;
+        if (noiseOverlay != null)
+            noiseOverlay.raycastTarget = false;
+
         ResetOverlay();
+
+        if (returningFromMemory)
+        {
+            returningFromMemory = false;
+            TriggerGlitchFadeOut();
+        }
     }
 
     private void OnDestroy()
@@ -60,18 +94,110 @@ public class ScreenGlitchEffect : MonoBehaviour
 
     private void HandleCoreMemoryDeleted(MemoryFile file)
     {
-        if (file != null)
-            TriggerGlitch();
+        if (file == null) return;
+
+        if (TryGetScene(file.memoryId, out string sceneName))
+        {
+            TriggerMemoryTransition(sceneName);
+        }
+        else if (file.memoryId == mothersVoiceMemoryId)
+        {
+            PlayMothersVoiceAudio();
+        }
+        else
+        {
+            TriggerGlitchFadeOut();
+        }
     }
 
-    public void TriggerGlitch()
+    private void PlayMothersVoiceAudio()
+    {
+        if (audioSource != null && mothersVoiceAudio != null)
+            audioSource.PlayOneShot(mothersVoiceAudio);
+    }
+
+    public void TriggerMemoryTransition(string sceneName)
     {
         if (glitchRoutine != null)
             StopCoroutine(glitchRoutine);
 
         PlayGlitchSound();
+        returningFromMemory = true;
+        PendingMemoryTransition = true;
+        glitchRoutine = StartCoroutine(GlitchLoop(true, () => LoadMemoryScene(sceneName)));
+    }
 
-        glitchRoutine = StartCoroutine(GlitchRoutine());
+    public void TriggerGlitchFadeOut()
+    {
+        if (glitchRoutine != null)
+            StopCoroutine(glitchRoutine);
+
+        PlayGlitchSound();
+        glitchRoutine = StartCoroutine(GlitchLoop(false, null));
+    }
+
+    public void TriggerGlitch()
+    {
+        TriggerGlitchFadeOut();
+    }
+
+    private IEnumerator GlitchLoop(bool easeIn, Action onEnd)
+    {
+        float elapsed = 0f;
+        float duration = glitchDuration; // 严格锁定当前设定的总时间（例如 2 秒）
+
+        while (elapsed < duration)
+        {
+            // 计算当前进度的百分比 (0 到 1)
+            float t = Mathf.Clamp01(elapsed / duration);
+            float intensity = easeIn ? t : (1f - t);
+
+            // 应用当前强度的花屏画面与音量
+            ApplyGlitchFrame(intensity);
+
+            // 计算下一次闪烁的随机间隔
+            float waitTime = UnityEngine.Random.Range(minFlickerInterval, maxFlickerInterval);
+            
+            // 关键修复：把等待的时间累加到 elapsed 中，确保真实耗时严格等于 glitchDuration
+            elapsed += waitTime;
+            
+            yield return new WaitForSeconds(waitTime);
+        }
+
+        // 动画结束，瞬间将强度拉满（1）或归零（0）
+        ApplyGlitchFrame(easeIn ? 1f : 0f);
+
+        // 触发后续回调（如进入记忆场景或结束花屏）
+        onEnd?.Invoke();
+        glitchRoutine = null;
+    }
+
+    private void ApplyGlitchFrame(float intensity)
+    {
+        if (glitchOverlayRect != null)
+        {
+            glitchOverlayRect.anchoredPosition = UnityEngine.Random.value < 0.6f
+                ? new Vector2(UnityEngine.Random.Range(-maxOffset, maxOffset) * intensity, 0f)
+                : Vector2.zero;
+        }
+
+        if (glitchOverlay != null)
+        {
+            Color color = glitchOverlay.color;
+            color.a = UnityEngine.Random.Range(0f, maxAlpha) * intensity;
+            glitchOverlay.color = color;
+        }
+
+        if (noiseOverlay != null && noiseOverlay.texture != null)
+        {
+            Rect uv = noiseOverlay.uvRect;
+            uv.x = UnityEngine.Random.Range(0f, 1f);
+            uv.y = UnityEngine.Random.Range(0f, 1f);
+            noiseOverlay.uvRect = uv;
+        }
+
+        if (audioSource != null)
+            audioSource.volume = maxVolume * intensity;
     }
 
     private void PlayGlitchSound()
@@ -84,52 +210,25 @@ public class ScreenGlitchEffect : MonoBehaviour
         audioSource.Play();
     }
 
-    private IEnumerator GlitchRoutine()
+    private bool TryGetScene(string memoryId, out string sceneName)
     {
-        float duration = glitchDuration;
-
-        float elapsed = 0f;
-        while (elapsed < duration)
+        foreach (MemorySceneMapping mapping in memoryScenes)
         {
-            elapsed += Time.deltaTime;
-            float intensity = 1f - (elapsed / duration);
-
-            if (glitchOverlayRect != null)
+            if (mapping.memoryId == memoryId)
             {
-                glitchOverlayRect.anchoredPosition = Random.value < 0.6f
-                    ? new Vector2(Random.Range(-maxOffset, maxOffset) * intensity, 0f)
-                    : Vector2.zero;
+                sceneName = mapping.sceneName;
+                return true;
             }
-
-            if (glitchOverlay != null)
-            {
-                Color color = glitchOverlay.color;
-                color.a = Random.Range(0f, maxAlpha) * intensity;
-                glitchOverlay.color = color;
-            }
-
-            if (noiseOverlay != null && noiseOverlay.texture != null)
-            {
-                Rect uv = noiseOverlay.uvRect;
-                uv.x = Random.Range(0f, 1f);
-                uv.y = Random.Range(0f, 1f);
-                noiseOverlay.uvRect = uv;
-            }
-
-            if (audioSource != null)
-                audioSource.volume = maxVolume * intensity;
-
-            yield return new WaitForSeconds(Random.Range(minFlickerInterval, maxFlickerInterval));
         }
+        sceneName = null;
+        return false;
+    }
 
-        if (audioSource != null)
-        {
-            audioSource.volume = 0f;
-            audioSource.Stop();
-        }
+    private void LoadMemoryScene(string sceneName)
+    {
+        if (string.IsNullOrEmpty(sceneName)) return;
 
-        ResetOverlay();
-        glitchRoutine = null;
+        SceneManager.LoadScene(sceneName);
     }
 
     private void ResetOverlay()
@@ -144,4 +243,11 @@ public class ScreenGlitchEffect : MonoBehaviour
             glitchOverlay.color = color;
         }
     }
+}
+
+[Serializable]
+public class MemorySceneMapping
+{
+    public string memoryId;
+    public string sceneName;
 }

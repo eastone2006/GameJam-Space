@@ -20,7 +20,10 @@ public class HospitalCameraWakeShake : MonoBehaviour
         originalLocalPosition = transform.localPosition;
         originalLocalRotation = transform.localRotation;
 
-        StartCoroutine(WakeUpShake());
+        if (GameStartController.Instance != null && GameStartController.IntroPlayed)
+            return;
+
+        StartCoroutine(GameStartController.RunAfterStart(WakeUpShake()));
     }
 
     private IEnumerator WakeUpShake()

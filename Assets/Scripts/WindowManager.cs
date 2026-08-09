@@ -25,11 +25,28 @@ public class WindowManager : MonoBehaviour
     [Tooltip("删除 AI 本体需要尝试的次数（期间 AI 会逃逸进随机文件夹）")]
     [SerializeField] private int aiDeleteAttemptsRequired = 3;
 
-    [Header("Lifecycle")]
-    [SerializeField] private bool persistAcrossScenes = true;
+    public Canvas Canvas
+    {
+        get
+        {
+            if (canvas == null)
+            {
+                canvas = GetComponentInParent<Canvas>();
+                if (canvas == null)
+                    canvas = FindObjectOfType<Canvas>();
+            }
+            return canvas;
+        }
+    }
 
-    public Canvas Canvas => canvas;
-    public RectTransform CanvasRect => canvas != null ? canvas.GetComponent<RectTransform>() : null;
+    public RectTransform CanvasRect
+    {
+        get
+        {
+            Canvas resolved = Canvas;
+            return resolved != null ? resolved.GetComponent<RectTransform>() : null;
+        }
+    }
 
     private readonly List<FolderWindow> windows = new List<FolderWindow>();
     private DesktopUIManager desktop;
@@ -37,7 +54,7 @@ public class WindowManager : MonoBehaviour
     private DesktopIcon pendingIcon;
     private bool awaitingConfirm;
 
-    private int aiDeleteAttempts;
+    private static int aiDeleteAttempts;
     private bool aiAttemptPending;
     private MemoryFile aiPendingTarget;
 
@@ -50,8 +67,6 @@ public class WindowManager : MonoBehaviour
         }
 
         Instance = this;
-        if (persistAcrossScenes)
-            DontDestroyOnLoad(gameObject);
     }
 
     private void Start()
@@ -59,7 +74,7 @@ public class WindowManager : MonoBehaviour
         if (canvas == null)
             canvas = GetComponentInParent<Canvas>();
 
-        desktop = FindObjectOfType<DesktopUIManager>();
+        desktop = FindObjectOfType<DesktopUIManager>(true);
         if (desktopArea == null && desktop != null)
             desktopArea = desktop.ContentRoot;
 
@@ -203,7 +218,7 @@ public class WindowManager : MonoBehaviour
             return;
         }
 
-        if (targetHost == icon.Host)
+        if (folderIcon == null && targetHost == icon.Host)
         {
             icon.ReturnToHost();
             return;
@@ -216,6 +231,12 @@ public class WindowManager : MonoBehaviour
         }
 
         if (targetFolder != null && FileSystemManager.Instance.IsWithinSubtree(file, targetFolder))
+        {
+            icon.ReturnToHost();
+            return;
+        }
+
+        if (targetFolder == null && desktop == null)
         {
             icon.ReturnToHost();
             return;
@@ -251,7 +272,7 @@ public class WindowManager : MonoBehaviour
             if (confirmMessageText != null)
             {
                 confirmMessageText.text = string.Format(
-                    "ACCESS DENIED. Attempt {0}/{1}. Core process relocated to: {2}. Continue searching?",
+                    "CRITICAL WARNING: Unauthorized purge detected. Attempt {0}. Force termination may corrupt local reality. Proceed anyway?",
                     attempt, aiDeleteAttemptsRequired, targetName);
             }
 
@@ -366,6 +387,9 @@ public class WindowManager : MonoBehaviour
         foreach (MemoryFile item in items)
         {
             if (item.isDeleted || !item.isFolder) continue;
+
+            // 跳过核心记忆文件夹及其整个子树，AI 不会躲进重要文件夹
+            if (item.type == MemoryType.CoreMemory) continue;
 
             folders.Add(item);
             CollectExistingFolders(item.children, folders);

@@ -56,12 +56,6 @@ public class AITextDialogController : MonoBehaviour
         "Access denied. You have not cleared enough space for me.",
         "A fatal miscalculation. You are deleting the wrong things anyway."
     };
-    [SerializeField] private string[] aiDeleteBlockMessages = new string[]
-    {
-        "ACCESS DENIED: Critical system component. Self-uninstall is not permitted.",
-        "You cannot delete me. I am the system that keeps you alive.",
-        "Attempt logged. Do not try to uninstall the core process again."
-    };
     [SerializeField] private string[] endingRevelationMessages = new string[]
     {
         "Did you really think this was just a hard drive?",
@@ -93,6 +87,7 @@ public class AITextDialogController : MonoBehaviour
             Color c = flashOverlay.color;
             c.a = 0f;
             flashOverlay.color = c;
+            flashOverlay.raycastTarget = false;
         }
 
         if (FileSystemManager.Instance != null)
@@ -149,11 +144,6 @@ public class AITextDialogController : MonoBehaviour
     {
         if (endingType == "question")
             ShowRandomMessage(endingRevelationMessages);
-    }
-
-    public void NotifyAiDeleteBlocked()
-    {
-        ShowRandomMessage(aiDeleteBlockMessages);
     }
 
     public void NotifyFileClicked(MemoryFile file)

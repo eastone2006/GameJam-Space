@@ -14,7 +14,10 @@ public class WakeUpAudioEffect : MonoBehaviour
 
     private void Start()
     {
-        StartCoroutine(PlayWakeUpAudio());
+        if (GameStartController.Instance != null && GameStartController.IntroPlayed)
+            return;
+
+        StartCoroutine(GameStartController.RunAfterStart(PlayWakeUpAudio()));
     }
 
     private IEnumerator PlayWakeUpAudio()

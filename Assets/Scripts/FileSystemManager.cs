@@ -109,10 +109,6 @@ public class FileSystemManager : MonoBehaviour
             CreateFile("Moms_Voice_001", 12f),
             CreateFile("Bedtime_Story", 18f)));
 
-        desktopItems.Add(CreateFolder("Graduation", MemoryType.CoreMemory, "graduation",
-            CreateFile("Graduation_Ceremony", 30f),
-            CreateFile("Diploma_Scan", 5f)));
-
         desktopItems.Add(CreateFolder("Travel", MemoryType.CoreMemory, "travel",
             CreateFile("Roadtrip_Clips", 20f),
             CreateFile("Beach_Photo", 8f)));
@@ -150,6 +146,24 @@ public class FileSystemManager : MonoBehaviour
         };
         folder.children.AddRange(children);
         return folder;
+    }
+
+    public bool IsEverythingExceptAiDeleted()
+    {
+        return CountRemainingNonAi(desktopItems) == 0;
+    }
+
+    private int CountRemainingNonAi(IList<MemoryFile> items)
+    {
+        int count = 0;
+        foreach (MemoryFile item in items)
+        {
+            if (item.isDeleted) continue;
+            if (item.memoryId == "ai") continue;
+
+            count += 1 + CountRemainingNonAi(item.children);
+        }
+        return count;
     }
 
     public void MoveFileToFolder(MemoryFile file, MemoryFile targetFolder)

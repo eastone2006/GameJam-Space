@@ -11,7 +11,14 @@ public class LidOpeningEffect : MonoBehaviour
 
     private void Start()
     {
-        StartCoroutine(OpenEyes());
+        if (GameStartController.Instance != null && GameStartController.IntroPlayed)
+        {
+            SetLidScale(0f);
+            gameObject.SetActive(false);
+            return;
+        }
+
+        StartCoroutine(GameStartController.RunAfterStart(OpenEyes()));
     }
 
     private IEnumerator OpenEyes()
@@ -38,6 +45,7 @@ public class LidOpeningEffect : MonoBehaviour
         }
 
         SetLidScale(0f);
+        GameStartController.MarkIntroPlayed();
         gameObject.SetActive(false);
     }
 

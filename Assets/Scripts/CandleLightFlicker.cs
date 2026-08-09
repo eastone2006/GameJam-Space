@@ -24,6 +24,9 @@ public class CandleLightFlicker : MonoBehaviour
 
     private void Update()
     {
+        if (GameStartController.Instance != null && !GameStartController.HasStarted)
+            return;
+
         float noise = Mathf.PerlinNoise(
             noiseOffset,
             Time.time * flickerSpeed

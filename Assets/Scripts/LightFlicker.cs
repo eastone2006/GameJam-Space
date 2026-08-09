@@ -18,7 +18,7 @@ public class LightFlicker : MonoBehaviour
 
     private void Start()
     {
-        StartCoroutine(FlickerRoutine());
+        StartCoroutine(GameStartController.RunAfterStart(FlickerRoutine()));
     }
 
     private IEnumerator FlickerRoutine()

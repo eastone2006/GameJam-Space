@@ -18,7 +18,17 @@ public class EyeOpeningEffect : MonoBehaviour
 
     private void Start()
     {
-        StartCoroutine(OpenEyes());
+        if (GameStartController.Instance != null && GameStartController.IntroPlayed)
+        {
+            canvasGroup.alpha = 0f;
+            canvasGroup.blocksRaycasts = false;
+            if (wakeUpVolume != null)
+                wakeUpVolume.weight = 0f;
+            gameObject.SetActive(false);
+            return;
+        }
+
+        StartCoroutine(GameStartController.RunAfterStart(OpenEyes()));
     }
 
     private IEnumerator OpenEyes()
@@ -62,6 +72,7 @@ public class EyeOpeningEffect : MonoBehaviour
             wakeUpVolume.weight = 0f;
         }
 
+        GameStartController.MarkIntroPlayed();
         gameObject.SetActive(false);
     }
 }

@@ -31,6 +31,9 @@ public class ComputerInteract : MonoBehaviour
         if (promptUI != null)
             promptUI.SetActive(false);
 
+        if (GameStartController.Instance != null && !GameStartController.HasStarted)
+            return;
+
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
