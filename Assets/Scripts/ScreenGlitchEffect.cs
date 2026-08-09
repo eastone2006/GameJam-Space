@@ -44,6 +44,7 @@ public class ScreenGlitchEffect : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float mothersVoiceVolume = 1f;
 
     public static bool PendingMemoryTransition { get; private set; }
+    public static bool MothersVoicePlaying { get; private set; }
 
     private static bool returningFromMemory;
 
@@ -121,6 +122,15 @@ public class ScreenGlitchEffect : MonoBehaviour
 
         audioSource.volume = mothersVoiceVolume;
         audioSource.PlayOneShot(mothersVoiceAudio);
+
+        MothersVoicePlaying = true;
+        StartCoroutine(ClearMothersVoicePlaying(mothersVoiceAudio.length));
+    }
+
+    private IEnumerator ClearMothersVoicePlaying(float duration)
+    {
+        yield return new WaitForSecondsRealtime(duration);
+        MothersVoicePlaying = false;
     }
 
     public void TriggerMemoryTransition(string sceneName)

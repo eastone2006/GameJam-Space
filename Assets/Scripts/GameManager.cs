@@ -24,6 +24,8 @@ public class GameManager : MonoBehaviour
     public event Action<string> OnEndingTriggered;
     public event Action OnAiInducementFailed;
 
+    public static string LastEndingType { get; private set; }
+
     private readonly HashSet<string> deletedMemories = new HashSet<string>();
 
     public IReadOnlyCollection<string> DeletedMemories => deletedMemories;
@@ -75,6 +77,8 @@ public class GameManager : MonoBehaviour
 
         // 记忆场景转场进行中时先不跳结局，等回到主场景再说
         if (ScreenGlitchEffect.PendingMemoryTransition) return;
+        // 最后一个重要文件是 MotherVoice 时，先播完音频再跳结局
+        if (ScreenGlitchEffect.MothersVoicePlaying) return;
         if (Time.time < allDeletedWaitUntil) return;
 
         pendingAllDeletedEnding = false;
@@ -108,6 +112,7 @@ public class GameManager : MonoBehaviour
 
     public void TriggerEnding(string endingType)
     {
+        LastEndingType = endingType;
         OnEndingTriggered?.Invoke(endingType);
 
         switch (endingType)
